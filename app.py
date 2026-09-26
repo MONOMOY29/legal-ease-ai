@@ -21,6 +21,18 @@ def extract_text_from_pdf(uploaded_file):
         text += page.extract_text() or ""
     return text
 
+# --- Cached AI call (avoids repeat API calls for identical requests) ---
+@st.cache_data(show_spinner=False)
+def get_ai_response(_model, prompt_text):
+    response = _model.generate_content(prompt_text)
+    return response.text
+
+def safe_generate(prompt_text):
+    try:
+        return get_ai_response(model, prompt_text)
+    except Exception:
+        return "⚠️ Something went wrong generating this response. Please wait a moment and try again."
+
 # --- Input section ---
 st.subheader("1. Upload or paste your agreement")
 input_method = st.radio("Choose input method:", ["Upload PDF", "Paste text"])
@@ -33,11 +45,9 @@ if input_method == "Upload PDF":
 else:
     document_text = st.text_area("Paste your agreement text here", height=250)
 
-# --- Store in session so it persists across button clicks ---
 if document_text:
     st.session_state["document_text"] = document_text
 
-# --- Action buttons ---
 if "document_text" in st.session_state and st.session_state["document_text"]:
     st.subheader("2. What do you want to do?")
     col1, col2 = st.columns(2)
@@ -57,9 +67,9 @@ Cover: rent amount, deposit, notice period, who pays what, and any unusual terms
 
 AGREEMENT:
 {doc}"""
-            response = model.generate_content(prompt)
+            result = safe_generate(prompt)
             st.subheader("Plain-English Summary")
-            st.write(response.text)
+            st.write(result)
 
     if risk_btn:
         with st.spinner("Checking for risky clauses..."):
@@ -70,9 +80,9 @@ For each, explain briefly why it's worth noticing. If nothing stands out, say so
 
 AGREEMENT:
 {doc}"""
-            response = model.generate_content(prompt)
+            result = safe_generate(prompt)
             st.subheader("Risk Flags")
-            st.write(response.text)
+            st.write(result)
 
     if checklist_btn:
         with st.spinner("Building your checklist..."):
@@ -82,9 +92,9 @@ the landlord about before signing.
 
 AGREEMENT:
 {doc}"""
-            response = model.generate_content(prompt)
+            result = safe_generate(prompt)
             st.subheader("Before You Sign — Checklist")
-            st.write(response.text)
+            st.write(result)
 
     st.divider()
     st.subheader("3. Ask a question about this agreement")
@@ -99,8 +109,8 @@ AGREEMENT:
 {doc}
 
 QUESTION: {user_question}"""
-            response = model.generate_content(prompt)
-            st.write(response.text)
+            result = safe_generate(prompt)
+            st.write(result)
 
 st.divider()
 st.caption("⚠️ This tool provides general information, not legal advice. For serious concerns, consult a qualified lawyer.")
