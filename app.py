@@ -152,4 +152,8 @@ if "document_text" in st.session_state and st.session_state["document_text"]:
     )
     if st.button("Ask") and user_question:
         with st.spinner("Thinking..."):
-            result =
+            result = safe_generate(build_qa_prompt(doc, user_question))
+            st.write(result)
+
+st.divider()
+st.caption("⚠️ This tool provides general information, not legal advice. For serious concerns, consult a qualified lawyer.")
