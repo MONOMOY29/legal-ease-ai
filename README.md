@@ -18,3 +18,17 @@ A GenAI-powered assistant that helps Indian tenants understand rental agreements
 pip install -r requirements.txt
 ```
 Create a `.env` file with:
+GEMINI_API_KEY=your_key_here
+Run locally:
+```bash
+streamlit run app.py
+```
+
+## Testing
+```bash
+pip install pytest
+pytest test_app.py
+```
+
+## Disclaimer
+This tool provides general information, not legal advice. For serious legal concerns, consult a qualified lawyer.
