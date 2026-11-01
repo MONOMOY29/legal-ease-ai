@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock, patch
+import io
 from app import (
     extract_text_from_pdf,
     truncate_document,
@@ -5,73 +7,61 @@ from app import (
     build_risk_prompt,
     build_checklist_prompt,
     build_qa_prompt,
-    safe_generate,
+    run_gemini_query,
     MAX_DOC_CHARS,
 )
 
-
-def test_extract_text_from_pdf_is_callable():
-    assert callable(extract_text_from_pdf)
-
-
 def test_truncate_document_under_limit():
-    short_text = "hello world"
+    short_text = "Rental agreement between Party A and Party B."
     assert truncate_document(short_text) == short_text
 
-
 def test_truncate_document_over_limit():
-    long_text = "a" * (MAX_DOC_CHARS + 500)
+    long_text = "A" * (MAX_DOC_CHARS + 500)
     result = truncate_document(long_text)
     assert len(result) == MAX_DOC_CHARS
 
-
-def test_build_summary_prompt_includes_document():
-    doc = "Rent is 10000 per month."
+def test_build_summary_prompt():
+    doc = "Rent: 15,000 INR per month."
     prompt = build_summary_prompt(doc)
     assert doc in prompt
-    assert "plain" in prompt.lower()
+    assert "plain english" in prompt.lower()
 
-
-def test_build_risk_prompt_includes_document():
-    doc = "Deposit is non-refundable."
+def test_build_risk_prompt():
+    doc = "Security deposit non-refundable under any circumstance."
     prompt = build_risk_prompt(doc)
     assert doc in prompt
-    assert "risky" in prompt.lower() or "unfair" in prompt.lower()
+    assert "risks" in prompt.lower() or "flag" in prompt.lower()
 
-
-def test_build_checklist_prompt_includes_document():
-    doc = "Notice period is one month."
+def test_build_checklist_prompt():
+    doc = "Agreement valid for 11 months."
     prompt = build_checklist_prompt(doc)
     assert doc in prompt
     assert "checklist" in prompt.lower()
 
-
-def test_build_qa_prompt_includes_question_and_document():
-    doc = "Rent due on the 5th."
-    question = "When is rent due?"
-    prompt = build_qa_prompt(doc, question)
+def test_build_qa_prompt():
+    doc = "Notice period is 30 days."
+    query = "What is the notice period?"
+    prompt = build_qa_prompt(doc, query)
     assert doc in prompt
-    assert question in prompt
+    assert query in prompt
 
+@patch("app.genai.GenerativeModel")
+def test_run_gemini_query_success(mock_model_class):
+    mock_instance = MagicMock()
+    mock_instance.generate_content.return_value.text = "This is a clean summary."
+    mock_model_class.return_value = mock_instance
 
-def test_safe_generate_handles_failure_gracefully(monkeypatch):
-    import app
+    with patch("app.api_key", "test-key-12345"):
+        result = run_gemini_query("Summarize this document")
+        assert result == "This is a clean summary."
 
-    def broken_get_ai_response(_model, prompt_text):
-        raise RuntimeError("simulated failure")
+@patch("app.genai.GenerativeModel")
+def test_run_gemini_query_exception_handling(mock_model_class):
+    mock_instance = MagicMock()
+    mock_instance.generate_content.side_effect = RuntimeError("Quota limit reached")
+    mock_model_class.return_value = mock_instance
 
-    monkeypatch.setattr(app, "get_ai_response", broken_get_ai_response)
-    result = safe_generate("any prompt")
-    assert "went wrong" in result.lower()
-
-
-def test_error_handling_present_in_source():
-    with open("app.py") as f:
-        content = f.read()
-    assert "except Exception" in content
-
-
-def test_model_configured_in_source():
-    with open("app.py") as f:
-        content = f.read()
-    assert "GenerativeModel" in content
+    with patch("app.api_key", "test-key-12345"):
+        result = run_gemini_query("Analyze clauses")
+        assert "Service error encountered" in result
+        assert "Quota limit reached" in result
