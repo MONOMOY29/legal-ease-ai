@@ -1,159 +1,175 @@
+import os
 import streamlit as st
 import google.generativeai as genai
 from dotenv import load_dotenv
-import os
-import PyPDF2
+from pypdf import PdfReader
 
-# --- Setup ---
+# --- Environment & Configuration ---
 load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel("gemini-flash-lite-latest")
+api_key = os.getenv("GEMINI_API_KEY")
 
-st.set_page_config(page_title="LegalEase AI", page_icon="📄", layout="wide")
-st.title("📄 LegalEase AI")
-st.caption("Understand your rental agreement before you sign it — powered by Gemini")
-
-MAX_DOC_CHARS = 20000  # safety limit: avoids excessive API cost/abuse from huge uploads
-
-
-def extract_text_from_pdf(uploaded_file) -> str:
-    """Extract all text from an uploaded PDF file."""
-    reader = PyPDF2.PdfReader(uploaded_file)
-    text = ""
-    for page in reader.pages:
-        text += page.extract_text() or ""
-    return text
-
-
-def truncate_document(text: str) -> str:
-    """Limit document length for cost/efficiency and to prevent abuse."""
-    if len(text) > MAX_DOC_CHARS:
-        return text[:MAX_DOC_CHARS]
-    return text
-
-
-def build_summary_prompt(doc: str) -> str:
-    return f"""You are a legal literacy assistant for everyday renters in India, not a lawyer.
-Summarize the following rental agreement in plain, simple English. Use short bullet points.
-Cover: rent amount, deposit, notice period, who pays what, and any unusual terms.
-
-AGREEMENT:
-{doc}"""
-
-
-def build_risk_prompt(doc: str) -> str:
-    return f"""You are a legal literacy assistant for everyday renters in India, not a lawyer.
-Review this rental agreement and list any clauses that could be risky, unusual, or unfair to the tenant
-(e.g. excessive deposit forfeiture, one-sided termination rights, hidden charges, vague maintenance terms).
-For each, explain briefly why it's worth noticing. If nothing stands out, say so.
-
-AGREEMENT:
-{doc}"""
-
-
-def build_checklist_prompt(doc: str) -> str:
-    return f"""You are a legal literacy assistant for everyday renters in India, not a lawyer.
-Based on this rental agreement, generate a short checklist of things the tenant should clarify or ask
-the landlord about before signing.
-
-AGREEMENT:
-{doc}"""
-
-
-def build_qa_prompt(doc: str, question: str) -> str:
-    return f"""You are a legal literacy assistant for everyday renters in India, not a lawyer.
-Answer the user's question using ONLY the agreement text below. If the answer isn't in the document,
-say so clearly instead of guessing.
-
-AGREEMENT:
-{doc}
-
-QUESTION: {question}"""
-
-
-@st.cache_data(show_spinner=False)
-def get_ai_response(_model, prompt_text: str) -> str:
-    """Call the Gemini API and return the response text. Cached to avoid duplicate calls."""
-    response = _model.generate_content(prompt_text)
-    return response.text
-
-
-def safe_generate(prompt_text: str) -> str:
-    """Wrapper that never leaks raw exceptions/tracebacks to the user."""
-    try:
-        return get_ai_response(model, prompt_text)
-    except Exception:
-        return "⚠️ Something went wrong generating this response. Please wait a moment and try again."
-
-
-# --- Input section ---
-st.subheader("1. Upload or paste your agreement")
-input_method = st.radio(
-    "Choose how you'd like to provide your agreement",
-    ["Upload PDF", "Paste text"],
-    help="Upload a PDF file or paste the text of your rental agreement directly."
+st.set_page_config(
+    page_title="LegalEase AI",
+    page_icon="📄",
+    layout="wide"
 )
 
-document_text = ""
-if input_method == "Upload PDF":
-    uploaded_file = st.file_uploader(
-        "Upload your rental agreement (PDF)",
-        type=["pdf"],
-        help="Only PDF files are accepted. Your file is not stored after this session ends."
-    )
-    if uploaded_file:
-        document_text = extract_text_from_pdf(uploaded_file)
-else:
-    document_text = st.text_area(
-        "Paste your agreement text here",
-        height=250,
-        help="Paste the full text of your rental agreement."
+MAX_DOC_CHARS = 20000  # Safety limit: prevents excessive token consumption
+
+# --- Pure Helper Functions (Tested in pytest) ---
+def extract_text_from_pdf(uploaded_file) -> str:
+    """Extract all text from an uploaded PDF stream."""
+    try:
+        reader = PdfReader(uploaded_file)
+        text = [page.extract_text() or "" for page in reader.pages]
+        return "\n".join(text).strip()
+    except Exception as e:
+        return f"Error reading PDF: {e}"
+
+def truncate_document(text: str, max_chars: int = MAX_DOC_CHARS) -> str:
+    """Trim document to prevent token budget exhaustion."""
+    return text[:max_chars] if len(text) > max_chars else text
+
+def build_summary_prompt(doc: str) -> str:
+    return (
+        "You are an Indian legal literacy assistant for everyday tenants, not an attorney.\n"
+        "Summarize this rental agreement in straightforward, plain English using concise bullet points.\n"
+        "Cover: rent amount, security deposit & refund rules, notice periods, utility maintenance liability, "
+        "and any unusual clauses.\n\n"
+        f"AGREEMENT:\n{doc}"
     )
 
-if document_text:
-    document_text = truncate_document(document_text)
-    st.session_state["document_text"] = document_text
+def build_risk_prompt(doc: str) -> str:
+    return (
+        "You are an Indian legal literacy assistant for everyday tenants, not an attorney.\n"
+        "Analyze this agreement and flag clauses that pose risks, excessive forfeiture penalties, "
+        "asymmetrical termination clauses, or vague landlord liabilities.\n"
+        "Explain clearly why each flag matters in daily life. If clean, explicitly confirm.\n\n"
+        f"AGREEMENT:\n{doc}"
+    )
 
-if "document_text" in st.session_state and st.session_state["document_text"]:
-    st.subheader("2. What do you want to do?")
-    col1, col2 = st.columns(2)
-    with col1:
-        simplify_btn = st.button("📝 Simplify this agreement", help="Get a plain-English summary")
-        risk_btn = st.button("⚠️ Flag risky clauses", help="Highlight unusual or unfair terms")
-    with col2:
-        checklist_btn = st.button("✅ Generate a clarification checklist", help="Get a pre-signing checklist")
+def build_checklist_prompt(doc: str) -> str:
+    return (
+        "You are an Indian legal literacy assistant for everyday tenants.\n"
+        "Provide a high-priority, actionable checklist of questions or missing terms the tenant "
+        "should demand in writing before executing this agreement.\n\n"
+        f"AGREEMENT:\n{doc}"
+    )
+
+def build_qa_prompt(doc: str, question: str) -> str:
+    return (
+        "You are an Indian legal literacy assistant for everyday tenants.\n"
+        "Answer the question strictly and solely based on the text provided below. "
+        "If the information is not explicitly documented, state that it is not covered.\n\n"
+        f"AGREEMENT:\n{doc}\n\n"
+        f"QUESTION: {question}"
+    )
+
+def run_gemini_query(prompt_text: str, model_name: str = "gemini-1.5-flash") -> str:
+    """API wrapper with safe failure fallback."""
+    if not api_key:
+        return "⚠️ Gemini API Key not found. Please provide GEMINI_API_KEY in your environment or .env file."
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(model_name)
+        response = model.generate_content(prompt_text)
+        return response.text
+    except Exception as err:
+        return f"⚠️ Service error encountered: {str(err)}"
+
+
+# --- Main Application Interface ---
+def main():
+    st.title("📄 LegalEase AI")
+    st.caption("Understand your rental agreement before signing — Powered by Google Gemini")
+
+    if not api_key:
+        st.warning("⚠️ GEMINI_API_KEY environment variable is not configured. AI features will remain offline.", icon="⚠️")
+
+    # Initialize Session State
+    for key in ["summary_output", "risk_output", "checklist_output", "qa_output", "document_text"]:
+        if key not in st.session_state:
+            st.session_state[key] = ""
+
+    st.subheader("1. Upload or Paste Rental Agreement")
+    input_method = st.radio(
+        "Input source",
+        ["Upload PDF", "Paste text"],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+
+    raw_text = ""
+    if input_method == "Upload PDF":
+        uploaded_file = st.file_uploader(
+            "Upload Agreement (PDF)",
+            type=["pdf"],
+            help="Files are processed directly in-memory and not stored."
+        )
+        if uploaded_file:
+            raw_text = extract_text_from_pdf(uploaded_file)
+    else:
+        raw_text = st.text_area(
+            "Paste full agreement text",
+            height=200,
+            placeholder="Paste raw contract terms here..."
+        )
+
+    if raw_text:
+        st.session_state["document_text"] = truncate_document(raw_text)
 
     doc = st.session_state["document_text"]
 
-    if simplify_btn:
-        with st.spinner("Reading your agreement..."):
-            result = safe_generate(build_summary_prompt(doc))
-            st.subheader("Plain-English Summary")
-            st.write(result)
+    if doc:
+        st.divider()
+        st.subheader("2. Analyze Document")
+        col1, col2, col3 = st.columns(3)
 
-    if risk_btn:
-        with st.spinner("Checking for risky clauses..."):
-            result = safe_generate(build_risk_prompt(doc))
-            st.subheader("Risk Flags")
-            st.write(result)
+        with col1:
+            if st.button("📝 Plain Summary", use_container_width=True):
+                with st.spinner("Analyzing terms..."):
+                    st.session_state["summary_output"] = run_gemini_query(build_summary_prompt(doc))
 
-    if checklist_btn:
-        with st.spinner("Building your checklist..."):
-            result = safe_generate(build_checklist_prompt(doc))
-            st.subheader("Before You Sign — Checklist")
-            st.write(result)
+        with col2:
+            if st.button("⚠️ Flag Risks", use_container_width=True):
+                with st.spinner("Checking clauses..."):
+                    st.session_state["risk_output"] = run_gemini_query(build_risk_prompt(doc))
+
+        with col3:
+            if st.button("✅ Pre-signing Checklist", use_container_width=True):
+                with st.spinner("Compiling checklist..."):
+                    st.session_state["checklist_output"] = run_gemini_query(build_checklist_prompt(doc))
+
+        # Persistent Display of Results
+        if st.session_state["summary_output"]:
+            st.markdown("### Summary")
+            st.info(st.session_state["summary_output"])
+
+        if st.session_state["risk_output"]:
+            st.markdown("### Risk Analysis")
+            st.warning(st.session_state["risk_output"])
+
+        if st.session_state["checklist_output"]:
+            st.markdown("### Actionable Checklist")
+            st.success(st.session_state["checklist_output"])
+
+        st.divider()
+        st.subheader("3. Inquire on Specific Clauses")
+        user_question = st.text_input(
+            "Clause inquiry",
+            placeholder="e.g., Who covers repairs to plumbing and electrical wiring?",
+            label_visibility="collapsed"
+        )
+        if st.button("Search Agreement") and user_question:
+            with st.spinner("Reviewing contract..."):
+                st.session_state["qa_output"] = run_gemini_query(build_qa_prompt(doc, user_question))
+
+        if st.session_state["qa_output"]:
+            st.markdown("### Answer")
+            st.write(st.session_state["qa_output"])
 
     st.divider()
-    st.subheader("3. Ask a question about this agreement")
-    user_question = st.text_input(
-        "Type your question",
-        placeholder="e.g. Can my landlord increase rent mid-year?",
-        help="Ask anything specific about the uploaded agreement."
-    )
-    if st.button("Ask") and user_question:
-        with st.spinner("Thinking..."):
-            result = safe_generate(build_qa_prompt(doc, user_question))
-            st.write(result)
+    st.caption("⚖️ **Disclaimer:** LegalEase AI provides informational summaries based on user input, not legal advice. For binding interpretations, consult an advocate registered with the Bar Council.")
 
-st.divider()
-st.caption("⚠️ This tool provides general information, not legal advice. For serious concerns, consult a qualified lawyer.")
+if __name__ == "__main__":
+    main()
