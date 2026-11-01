@@ -65,7 +65,7 @@ def build_qa_prompt(doc: str, question: str) -> str:
         f"QUESTION: {question}"
     )
 
-def run_gemini_query(prompt_text: str, model_name: str = "gemini-2.5-flash") -> str:
+def run_gemini_query(prompt_text: str, model_name: str = "gemini-3.8-flash") -> str:
     """API wrapper with safe failure fallback."""
     if not api_key:
         return "⚠️ Gemini API Key not found. Please provide GEMINI_API_KEY in your environment or .env file."
