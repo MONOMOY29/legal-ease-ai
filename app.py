@@ -91,4 +91,85 @@ def main():
         if key not in st.session_state:
             st.session_state[key] = ""
 
-    st.subheader("1. Upload or
+    st.subheader("1. Upload or Paste Rental Agreement")
+    input_method = st.radio(
+        "Input source",
+        ["Upload PDF", "Paste text"],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+
+    raw_text = ""
+    if input_method == "Upload PDF":
+        uploaded_file = st.file_uploader(
+            "Upload Agreement (PDF)",
+            type=["pdf"],
+            help="Files are processed directly in-memory and not stored."
+        )
+        if uploaded_file:
+            raw_text = extract_text_from_pdf(uploaded_file)
+    else:
+        raw_text = st.text_area(
+            "Paste full agreement text",
+            height=200,
+            placeholder="Paste raw contract terms here..."
+        )
+
+    if raw_text:
+        st.session_state["document_text"] = truncate_document(raw_text)
+
+    doc = st.session_state["document_text"]
+
+    if doc:
+        st.divider()
+        st.subheader("2. Analyze Document")
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            if st.button("📝 Plain Summary", use_container_width=True):
+                with st.spinner("Analyzing terms..."):
+                    st.session_state["summary_output"] = run_gemini_query(build_summary_prompt(doc))
+
+        with col2:
+            if st.button("⚠️ Flag Risks", use_container_width=True):
+                with st.spinner("Checking clauses..."):
+                    st.session_state["risk_output"] = run_gemini_query(build_risk_prompt(doc))
+
+        with col3:
+            if st.button("✅ Pre-signing Checklist", use_container_width=True):
+                with st.spinner("Compiling checklist..."):
+                    st.session_state["checklist_output"] = run_gemini_query(build_checklist_prompt(doc))
+
+        # Persistent Display of Results
+        if st.session_state["summary_output"]:
+            st.markdown("### Summary")
+            st.info(st.session_state["summary_output"])
+
+        if st.session_state["risk_output"]:
+            st.markdown("### Risk Analysis")
+            st.warning(st.session_state["risk_output"])
+
+        if st.session_state["checklist_output"]:
+            st.markdown("### Actionable Checklist")
+            st.success(st.session_state["checklist_output"])
+
+        st.divider()
+        st.subheader("3. Inquire on Specific Clauses")
+        user_question = st.text_input(
+            "Clause inquiry",
+            placeholder="e.g., Who covers repairs to plumbing and electrical wiring?",
+            label_visibility="collapsed"
+        )
+        if st.button("Search Agreement") and user_question:
+            with st.spinner("Reviewing contract..."):
+                st.session_state["qa_output"] = run_gemini_query(build_qa_prompt(doc, user_question))
+
+        if st.session_state["qa_output"]:
+            st.markdown("### Answer")
+            st.write(st.session_state["qa_output"])
+
+    st.divider()
+    st.caption("⚖️ **Disclaimer:** LegalEase AI provides informational summaries based on user input, not legal advice. For binding interpretations, consult an advocate registered with the Bar Council.")
+
+if __name__ == "__main__":
+    main()
