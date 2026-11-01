@@ -1,34 +1,37 @@
-# LegalEase AI
+# 📄 LegalEase AI: Indian Rental Agreement Literacy Assistant
 
-A GenAI-powered assistant that helps Indian tenants understand rental agreements before signing.
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.35+-FF4B4B.svg)](https://streamlit.io/)
+[![Gemini API](https://img.shields.io/badge/Model-Gemini%201.5%20Flash-4E75F6.svg)](https://ai.google.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-## Features
-- **Simplify**: Plain-English summary of the agreement
-- **Risk Flags**: Highlights unusual, vague, or unfair clauses
-- **Checklist**: Auto-generated pre-signing questions to ask the landlord
-- **Q&A**: Ask specific questions, answered strictly from the uploaded document
+An AI-powered legal document interpreter built to help everyday tenants navigate complex residential leases, identify unfair terms, and clarify contractual obligations before signing.
 
-## Tech Stack
-- Streamlit (frontend/backend)
-- Google Gemini API (`gemini-flash-lite-latest`) via `google-generativeai` SDK
-- PyPDF2 for PDF text extraction
+---
 
-## Setup
+## 🎯 The Problem
+Residential lease agreements in India frequently include ambiguous maintenance clauses, asymmetric termination penalties, and arbitrary security deposit forfeiture conditions. Most tenants sign without reading dense legal text due to confusing terminology.
+
+## 💡 Solution Architecture
+LegalEase AI processes PDFs or raw text in-memory, normalizes document context, and executes specialized system-prompt queries using **Google Gemini 1.5 Flash**:
+- **Plain-English Summarization:** Distills rent schedules, notice periods, and payment responsibilities.
+- **Risk Detection Engine:** Flags one-sided clauses, excessive penalty rates, and hidden liabilities.
+- **Pre-Signing Checklist:** Suggests critical questions to clarify with landlords prior to signing.
+- **Grounded Q&A:** Answers user queries strictly based on provided text to eliminate hallucinations.
+
+---
+
+## 🛠️ Tech Stack
+- **Frontend / UI:** Streamlit
+- **LLM Engine:** Google Gemini Flash (`google-generativeai` SDK)
+- **Document Ingestion:** `pypdf`
+- **Testing Suite:** `pytest` (with mocked API fixtures)
+
+---
+
+## 🚀 Quickstart Guide
+
+### 1. Clone the repository
 ```bash
-pip install -r requirements.txt
-```
-Create a `.env` file with:
-GEMINI_API_KEY=your_key_here
-Run locally:
-```bash
-streamlit run app.py
-```
-
-## Testing
-```bash
-pip install pytest
-pytest test_app.py
-```
-
-## Disclaimer
-This tool provides general information, not legal advice. For serious legal concerns, consult a qualified lawyer.
+git clone [https://github.com/MONOMOY29/legal-ease-ai.git](https://github.com/MONOMOY29/legal-ease-ai.git)
+cd legal-ease-ai
