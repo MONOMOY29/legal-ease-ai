@@ -1,5 +1,7 @@
 # 📄 LegalEase AI: Indian Rental Agreement Literacy Assistant
-
+## Build note
+Built with AI-assisted development (live-coded with AI tools).
+My role: solo 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.35+-FF4B4B.svg)](https://streamlit.io/)
 [![Gemini API](https://img.shields.io/badge/Model-Gemini%201.5%20Flash-4E75F6.svg)](https://ai.google.dev/)
